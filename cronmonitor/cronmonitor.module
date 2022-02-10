@@ -1,0 +1,70 @@
+<?php
+
+/**
+ * Implements hook permission()
+ */
+function cronmonitor_permission() {
+  return array(
+    'administer cronmonitor' => array(
+      'title' => t('Administer Cron Monitor'),
+      'description' => t('Perform administration tasks Cron Monitor.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook menu()
+ */
+function cronmonitor_menu() {
+  $items['admin/config/cronmonitor'] = array(
+    'title' => 'Cron Monitor settings',
+    'type' => MENU_NORMAL_ITEM,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cronmonitor_admin_form'),
+    'access arguments' => array('administer cronmonitor'),
+  );
+  return $items;
+}
+
+/**
+ * Administration form for Cron Monitor()
+ */
+function cronmonitor_admin_form($form, &$form_state) {
+  $form['cronmonitor_enable'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Enable Cron Monitor.'),
+    '#default_value' => variable_get('cronmonitor_enable', 0)
+  );
+
+  $form['cronmonitor_email_text'] = array(
+    '#title' => t('Text to send with Cron Monitor Emails'),
+    '#type' => 'textarea',
+    '#description' => t('Enter some text to send with the Cron Monitor email messages'),
+    '#default_value' => variable_get('cronmonitor_email_text', ''),
+  );
+  return system_settings_form($form);
+}
+
+/**
+ * Implements hook cron()
+ */
+function cronmonitor_cron() {
+  if (variable_get('cronmonitor_enable', 0)) {
+    // Send cronmonitor email
+    drupal_mail('cronmonitor', 'cronmonitor_email', 'cesar.bolivarc@hotmail.com', Language_default());
+  }
+}
+
+/**
+ * Implements hook mail()
+ */
+function cronmonitor_mail($key, &$message, $params) {
+  switch ($key) {
+    case 'cronmonitor_email':
+      $message['subject'] = t('This is a cron monitor report');
+      $message['body'][] = t('This is a report from cron monitor on @site-name', array('@site_name' => variable_get('site_name', 'drupal7.test')));
+      $message['body'][] = t(variable_get('cronmonitor_email_text', ''));
+
+      break;
+  }
+}
