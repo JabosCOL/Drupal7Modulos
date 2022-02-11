@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function employees_install() {
+  $new_vocab = (object) array(
+    'name' => 'Tipo salario',
+    'description' => 'Contiene información sobre tipos de salario',
+    'machine_name' => 'tipo_salario_vocab',
+  );
+  taxonomy_vocabulary_save($new_vocab);
+
+  $vocab = taxonomy_vocabulary_machine_name_load('tipo_salario_vocab');
+
+  $term1 = (object) array(
+    'name' => 'Salario bajo',
+    'description' => 'Este es el salario más bajo',
+    'vid' => $vocab->vid,
+  );
+
+  $term2 = (object) array(
+    'name' => 'Salario medio',
+    'description' => 'Este es el salario medio',
+    'vid' => $vocab->vid,
+  );
+
+  $term3 = (object) array(
+    'name' => 'Salario alto',
+    'description' => 'Este es el salario más alto',
+    'vid' => $vocab->vid,
+  );
+
+  taxonomy_term_save($term1, $term2, $term3);
+}
