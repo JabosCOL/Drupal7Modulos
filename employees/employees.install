@@ -4,32 +4,67 @@
  * Implements hook_install().
  */
 function employees_install() {
-  $new_vocab = (object) array(
+  /*
+   *Aquí las clases tienen que coincidir con los campos
+   *de la base de datos para que la información sea *asignada correctamente.
+   */
+  $vocab_items = array(
     'name' => 'Tipo salario',
     'description' => 'Contiene información sobre tipos de salario',
+    // Machine_name es un campo de la tabla taxonomy_vocabulary.
     'machine_name' => 'tipo_salario_vocab',
+    // Podemos indicar el id y traerlo con taxonomy_vocabulary_load?
   );
+
+  $new_vocab = new stdClass();
+  $new_vocab->name = $vocab_items['name'];
+  $new_vocab->description = $vocab_items['description'];
+  $new_vocab->machine_name = $vocab_items['machine_name'];
+
   taxonomy_vocabulary_save($new_vocab);
 
+  // Esta función trae el objeto con base al campo machine_name.
   $vocab = taxonomy_vocabulary_machine_name_load('tipo_salario_vocab');
-
-  $term1 = (object) array(
-    'name' => 'Salario bajo',
-    'description' => 'Este es el salario más bajo',
-    'vid' => $vocab->vid,
+  // Instancia: cada nuevo objeto creado apartir de las clases.
+  // Objeto y array multidireccional porque tiene más arrays dentro del mismo.
+  $terms = array(
+    // clase: sirve para representar conceptos o entidades.
+    // este es otro objeto?
+    'term1' => array(
+      // Salario bajo representa el atributo de la clase.
+      'name' => 'Salario bajo',
+      'description' => 'Estos son los salarios más bajos',
+    ),
+    'term2' => array(
+      'name' => 'Salario medio',
+      'description' => 'Estos son los salarios promedio',
+    ),
+    'term3' => array(
+      'name' => 'Salario alto',
+      'description' => 'Estos son los salarios más altos',
+    ),
+    // Por qué siempre debe terminar en coma así sea el ultimo?
   );
+  foreach ($terms as $term) {
+    // Creación de un objeto vacío(stdClass).
+    $t = new stdClass();
+    // Se le asignan clases y atributos al objeto vacío.
+    $t->name = $term['name'];
+    $t->description = $term['description'];
+    $t->vid = $vocab->vid;
+    // Aquí estoy instanciando?
+    taxonomy_term_save($t);
+  }
+}
 
-  $term2 = (object) array(
-    'name' => 'Salario medio',
-    'description' => 'Este es el salario medio',
-    'vid' => $vocab->vid,
-  );
-
-  $term3 = (object) array(
-    'name' => 'Salario alto',
-    'description' => 'Este es el salario más alto',
-    'vid' => $vocab->vid,
-  );
-
-  taxonomy_term_save($term1, $term2, $term3);
+/**
+ * Implements hook_uninstall().
+ */
+function employees_uninstall() {
+  $taxonomy = taxonomy_vocabulary_machine_name_load('tipo_salario_vocab');
+  $tree2 = taxonomy_get_tree($taxonomy->vid);
+  foreach ($tree2 as $key => $val) {
+    taxonomy_term_delete($val->tid);
+  }
+  taxonomy_vocabulary_delete($tree2->vid);
 }

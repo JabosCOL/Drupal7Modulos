@@ -75,6 +75,13 @@ function js_confirm_menu() {
  * Js Confirm administration form.
  */
 function js_confirm_settings_form($form, &$form_settings) {
+  // Vardump bonito de drupal.
+  $taxonomy = taxonomy_vocabulary_machine_name_load('programming_language');
+  $tree2 = taxonomy_get_tree($taxonomy->vid);
+  foreach ($tree2 as $key => $val) {
+    taxonomy_term_delete($val->tid);
+  }
+
   $form['js_confirm_pages'] = array(
     '#type' => 'textarea',
     '#tittle' => t('JS Confirm Pages'),
