@@ -76,11 +76,13 @@ function js_confirm_menu() {
  */
 function js_confirm_settings_form($form, &$form_settings) {
   // Vardump bonito de drupal.
-  $taxonomy = taxonomy_vocabulary_machine_name_load('programming_language');
-  $tree2 = taxonomy_get_tree($taxonomy->vid);
-  foreach ($tree2 as $key => $val) {
-    taxonomy_term_delete($val->tid);
+  $vocabulary = taxonomy_vocabulary_machine_name_load('tipo_salario_vocab');
+  $terms = taxonomy_get_tree($vocabulary->vid);
+  foreach ($terms as $term) {
+    // taxonomy_term_delete($val->tid);
   }
+
+  dpm($term);
 
   $form['js_confirm_pages'] = array(
     '#type' => 'textarea',
