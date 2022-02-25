@@ -1,0 +1,52 @@
+<?php
+
+/**
+ * Implements hook_permission().
+ */
+function employees_permission() {
+  return array(
+    'submit employees' => array(
+      'title' => t('submit employees'),
+      'description' => t('submit the batch form'),
+    ),
+    'access employees submissions' => array(
+      'title' => t('Access employee batch submissions'),
+      'description' => t('Access the employee batch submissions'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function employees_menu() {
+  $items['employees'] = array(
+    'title' => 'Employees batch',
+    'type' => MENU_NORMAL_ITEM,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('employees_form'),
+    'access arguments' => array('access employees'),
+  );
+  return $items;
+}
+
+/**
+ * My example form().
+ */
+function form_example_form($form, &$form_state) {
+  $form['URL'] = array(
+    '#type' => 'textfield',
+    '#title' => t('URL'),
+    '#size' => 100,
+    '#maxlength' => 128,
+    '#required' => TRUE,
+    '#description' => t('Please enter an API to process the employees'),
+  );
+
+  $form['$submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Start process'),
+  );
+
+  return $form;
+}

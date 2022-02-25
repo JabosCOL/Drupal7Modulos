@@ -2,24 +2,19 @@
 
 /**
  * @file
- * Employees.install
+ * Employees.install.
  * Adds a taxonomy with 3 associated terms.
  */
 
 /**
- * Implements hook_install().
+ * Implements create_taxonomy().
  */
-function employees_install() {
-  /*
-   *Aquí las clases tienen que coincidir con los campos
-   *de la base de datos para que la información sea *asignada correctamente.
-   */
-
+function employees_create_taxonomy() {
   $vocab_items = [
-    'name' => 'Tipo salario',
-    'description' => 'Contiene información sobre tipos de salario',
+    'name' => 'Salary type',
+    'description' => 'Contents information about salary types',
     // Machine_name es un campo de la tabla taxonomy_vocabulary.
-    'machine_name' => 'tipo_salario_vocab',
+    'machine_name' => 'salary_type_vocab',
     // Podemos indicar el id y traerlo con taxonomy_vocabulary_load?
   ];
 
@@ -29,7 +24,7 @@ function employees_install() {
   $new_vocab->machine_name = $vocab_items['machine_name'];
 
   // Esta función trae el objeto con base al campo machine_name.
-  $vocab = taxonomy_vocabulary_machine_name_load('tipo_salario_vocab');
+  $vocab = taxonomy_vocabulary_machine_name_load('salary_type_vocab');
   $t = get_t();
 
   if ($vocab == NULL) {
@@ -45,41 +40,312 @@ function employees_install() {
     // clase: sirve para representar conceptos o entidades.
     // este es otro objeto?
     'term1' => [
-      // Salario bajo representa el atributo de la clase.
-      'name' => 'Salario bajo',
-      'description' => 'Estos son los salarios más bajos',
+      // Low salary representa el atributo de la clase.
+      'name' => 'Low salary',
+      'description' => 'These are the lowest salaries',
     ],
     'term2' => [
-      'name' => 'Salario medio',
-      'description' => 'Estos son los salarios promedio',
+      'name' => 'Medium salary',
+      'description' => 'These are the avarage salaries',
     ],
     'term3' => [
-      'name' => 'Salario alto',
-      'description' => 'Estos son los salarios más altos',
+      'name' => 'High salary',
+      'description' => 'These are the highest salaries',
     ],
-    // Por qué siempre debe terminar en coma así sea el ultimo?
   ];
 
+  $vocab = taxonomy_vocabulary_machine_name_load('salary_type_vocab');
   foreach ($terms as $term) {
     // Creación de un objeto vacío(stdClass).
-    $t = new stdClass();
+    $add_term = new stdClass();
     // Se le asignan clases y atributos al objeto vacío.
-    $t->name = $term['name'];
-    $t->description = $term['description'];
-    $t->vid = $vocab->vid;
+    $add_term->name = $term['name'];
+    $add_term->description = $term['description'];
+    $add_term->vid = $vocab->vid;
     // Aquí estoy instanciando?
-    taxonomy_term_save($t);
+    taxonomy_term_save($add_term);
   }
+}
+
+/**
+ * Implements create_content_type().
+ */
+function employees_create_content_type() {
+  // $t significa que ese texto puede ser traducido.
+  $t = get_t();
+  $vocab = taxonomy_vocabulary_machine_name_load('salary_type_vocab');
+  // Implements new content type..
+  $content_type = array(
+    'type' => 'employees',
+    'name' => $t('Employees'),
+    'description' => $t('add new employee'),
+    'title_label' => $t("employee's name"),
+    'base' => 'node_content',
+  );
+
+  $node_type = node_type_set_defaults($content_type);
+
+  node_type_save($node_type);
+  $fields = array(
+
+    'employee_id' => array(
+      'field_name' => 'employee_id',
+      'type' => 'text',
+      // Cambiarlo a text.
+    ),
+
+    'employee_age' => array(
+      'field_name' => 'employee_age',
+      'type' => 'number_integer',
+      // Cambiarlo a integer.
+    ),
+
+    'employee_salary_type' => array(
+      'field_name' => 'employee_salary_type',
+      'type' => 'taxonomy_term_reference',
+      'settings' => array(
+        'allowed_values' => array(
+          array(
+            'vocabulary' => $vocab->machine_name,
+            'parent' => 0,
+          ),
+        ),
+      ),
+    ),
+  );
+
+  foreach ($fields as $field) {
+    field_create_field($field);
+  }
+
+  $instances = array(
+    'employee_id' => array(
+      'field_name' => 'employee_id',
+      'label' => $t('Employee id'),
+      'required' => TRUE,
+      'entity_type' => 'node',
+      'bundle' => 'employees',
+    ),
+    'employee_age' => array(
+      'field_name' => 'employee_age',
+      'label' => $t('Employee age'),
+      'required' => TRUE,
+      'entity_type' => 'node',
+      'bundle' => 'employees',
+    ),
+    'employee_salary_type' => array(
+      'field_name' => 'employee_salary_type',
+      'label' => $t('Employee salary'),
+      'required' => TRUE,
+      'entity_type' => 'node',
+      'bundle' => 'employees',
+      'widget' => array(
+        'type' => 'options_select',
+      ),
+    ),
+  );
+
+  foreach ($instances as $instance) {
+    field_create_instance($instance);
+  }
+}
+
+/**
+ * Implements create_nodes().
+ */
+function employees_create_nodes() {
+  $url = 'http://dummy.restapiexample.com/api/v1/employees';
+
+  $curl = curl_init();
+
+  curl_setopt_array($curl, array(
+    CURLOPT_URL => $url,
+    CURLOPT_RETURNTRANSFER => TRUE,
+    CURLOPT_ENCODING => '',
+    CURLOPT_MAXREDIRS => 10,
+    CURLOPT_TIMEOUT => 0,
+    CURLOPT_FOLLOWLOCATION => TRUE,
+    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+    CURLOPT_CUSTOMREQUEST => 'GET',
+  ));
+
+  $result = curl_exec($curl);
+
+  curl_close($curl);
+
+  $decoded = json_decode($result, TRUE);
+  $result = $decoded['data'];
+  employees_batch_init($result);
+}
+
+/**
+ * Implements batch_init().
+ */
+function employees_batch_init($result) {
+  $batch = [
+    'title' => t('Importing Employees ...'),
+    'operations' => ['employees_batch_worker', [$result]],
+    'init_message' => t('Commencing'),
+    'progress_message' => t('Processed @current out of @total.'),
+    'error_message' => t('An error occurred during processing'),
+    'finished' => 'employees_batch_finished',
+    'file' => drupal_get_path('module', 'employees') . '/employees.install',
+  ];
+
+  // Al enviar el result con un foreach el proceso inicia pero da un error
+  // de contraint violation en tid, porque $new_employee llega vacío al batch
+  // worker.
+  // Y cuando se envia result y se realiza el foreach en el batch worker,
+  // hace el proceso de largo sin implementar ningun nodo.
+  // hacer validación si se esta recibiendo un array y si no esta vacio.
+  foreach ($result as $new_employee) {
+    // No combinar array() con [] e.g:
+    // array('employees_...', [$new_employee]);
+    // elegir entre uno u otro pero no ambos.
+    $batch['operations'][] = ['employees_batch_worker', [$new_employee]];
+  }
+  batch_set($batch);
+
+  // Necesario en cualquier batch que no sea enviado desde el Form API
+  // para setear una redirección al finalizar el proceso.
+  batch_process('<front>');
+}
+
+/**
+ * Implements batch_worker().
+ */
+function employees_batch_worker($new_employee, &$context) {
+  $employee = new stdClass();
+  $employee->type = 'employees';
+  $employee->language = LANGUAGE_NONE;
+  $employee->employee_id[LANGUAGE_NONE][0]['value'] = $new_employee['id'];
+  $employee->title = $new_employee['employee_name'];
+  $employee->employee_age[LANGUAGE_NONE][0]['value'] = $new_employee['employee_age'];
+
+  // Aquí no me asignaba los terminos débido a que la función taxonomy_get_tree
+  // me devolvia un array y luego el objeto, por eso no se podia acceder
+  // directamente al tid, con reset se soluciona esto para que quede como un
+  // objeto sin el array anterior.
+  $low = reset(taxonomy_get_term_by_name('Low salary'));
+  $medium = reset(taxonomy_get_term_by_name('Medium salary'));
+  $high = reset(taxonomy_get_term_by_name('High salary'));
+
+  if ($new_employee['employee_salary'] <= 20000) {
+    // En el caso de la taxonomia no es necesario recorrer el array porque
+    // drupal ya lo hace automagicamente.
+    $employee->employee_salary_type = $low->tid;
+  }
+  elseif ($new_employee['employee_salary'] >= 20001 && $new_employee['employee_salary'] <= 50000) {
+    $employee->employee_salary_type = $medium->tid;
+  }
+  else {
+    $employee->employee_salary_type = $high->tid;
+  }
+  $employee->status = 1;
+
+  node_object_prepare($employee);
+  node_save($employee);
+
+  $context['results']['processed']++;
+  $context['message'] = t('Processing employee "@title"', array('@title' => $employee->title));
+}
+
+/**
+ * Implements batch_finished().
+ */
+function employees_batch_finished($success, $results, $operations) {
+  if ($success) {
+    drupal_set_message(t('Batch completed successfully'));
+  }
+  else {
+    // Reset funciona para hacer de nuevo la operación y poder obtener los datos necesarios.
+    $error_operation = reset($operations);
+    drupal_set_message(t('An error occurred while processing @operation with arguments : @args',
+    [
+      '@operation' => $error_operation[0],
+      '@args' => print_r($error_operation[0], TRUE),
+    ]));
+  }
+}
+
+/**
+ * Implements hook_install().
+ */
+function employees_install() {
+  employees_create_taxonomy();
+  employees_create_content_type();
+  employees_create_nodes();
 }
 
 /**
  * Implements hook_uninstall().
  */
 function employees_uninstall() {
-  $vocabulary = taxonomy_vocabulary_machine_name_load('tipo_salario_vocab');
+  // Delete taxonomy.
+  $vocabulary = taxonomy_vocabulary_machine_name_load('salary_type_vocab');
   $terms = taxonomy_get_tree($vocabulary->vid);
   foreach ($terms as $term) {
     taxonomy_term_delete($term->tid);
   }
   taxonomy_vocabulary_delete($vocabulary->vid);
+  drupal_set_message(t('Taxonomy %taxonomy has been deleted.', array('%taxonomy' => $vocabulary->name)));
+
+  // Delete fields and instances and db recorrds.
+  $fields = [
+    'comment_body' => array(
+      'field_name' => 'comment_body',
+      'entity_type' => 'comment',
+      'bundle' => 'comment_node_employees',
+    ),
+    'employee_id' => array(
+      'field_name' => 'employee_id',
+      'entity_type' => 'node',
+      'bundle' => 'employees',
+    ),
+    'employee_age' => array(
+      'field_name' => 'employee_age',
+      'entity_type' => 'node',
+      'bundle' => 'employees',
+    ),
+    'employee_salary_type' => array(
+      'field_name' => 'employee_salary_type',
+      'entity_type' => 'node',
+      'bundle' => 'employees',
+    ),
+  ];
+
+  foreach ($fields as $field) {
+    if ($instance = field_info_instance($field['entity_type'], $field['field_name'], $field['bundle'])) {
+      // field_delete_.... es para indicarle al cron que debe eliminar
+      // esos campos.
+      field_delete_instance($instance);
+      $enough_range_to_delete_everything = 9999999;
+      // Esto se usa porque los campos no seran eliminados de la db
+      // hasta realizar un Cron.
+      field_purge_batch($enough_range_to_delete_everything);
+    }
+  }
+  drupal_set_message(t('%count fields has been deleted.', array('%count' => count($fields))));
+
+  // Delete all nodes and content type.
+  $content_type = 'employees';
+  $results = db_select('node', 'n')
+    ->fields('n', ['nid'])
+    ->condition('type', $content_type)
+    ->execute();
+  foreach ($results as $result) {
+    $nids[] = $result->nid;
+  }
+  if (!empty($nids)) {
+    node_delete_multiple($nids);
+    drupal_set_message(t('%count nodes has been deleted.', array('%count' => count($nids))));
+  }
+
+  if (node_type_load($content_type)) {
+    node_type_delete($content_type);
+    variable_del('node_preview_' . $content_type);
+    drupal_set_message(t('%content_type content type has been deleted.', array('%content_type' => $content_type)));
+  }
+  node_types_rebuild();
+  variable_set('menu_rebuild_needed', TRUE);
 }
