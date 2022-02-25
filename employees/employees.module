@@ -31,16 +31,25 @@ function employees_menu() {
 }
 
 /**
- * My example form().
+ * My employees form().
  */
-function form_example_form($form, &$form_state) {
+function employees_form($form, &$form_state) {
+  $form['batch_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Batch name'),
+    '#size' => 100,
+    '#maxlength' => 128,
+    '#required' => TRUE,
+    '#description' => t('Please enter a name for your batch'),
+  );
+
   $form['URL'] = array(
     '#type' => 'textfield',
     '#title' => t('URL'),
     '#size' => 100,
     '#maxlength' => 128,
     '#required' => TRUE,
-    '#description' => t('Please enter an API to process the employees'),
+    '#description' => t('Please enter an API URL to process the employees'),
   );
 
   $form['$submit'] = array(
@@ -49,4 +58,147 @@ function form_example_form($form, &$form_state) {
   );
 
   return $form;
+}
+
+/**
+ * Submit handler for the employees_form. Inserts entry into the database.
+ */
+function employees_form_submit($form, &$form_state) {
+  $be_id = db_insert('batch_employees')
+    ->fields(
+    array(
+      'batch_name' => $form_state['values']['batch_name'],
+      'URL' => $form_state['values']['URL'],
+    )
+  )
+    ->execute();
+
+  $batch_name = $form_state['values']['batch_name'];
+  $query = db_select('batch_employees', 'be')
+    ->fields('be', array('URL'))
+    ->condition('batch_name', $batch_name)
+    ->execute();
+
+  $url = $query->fetchField();
+
+  employees_create_nodes($url);
+}
+
+/**
+ * Implements create_nodes().
+ */
+function employees_create_nodes($url) {
+
+  $curl = curl_init();
+
+  curl_setopt_array($curl, array(
+    CURLOPT_URL => $url,
+    CURLOPT_RETURNTRANSFER => TRUE,
+    CURLOPT_ENCODING => '',
+    CURLOPT_MAXREDIRS => 10,
+    CURLOPT_TIMEOUT => 0,
+    CURLOPT_FOLLOWLOCATION => TRUE,
+    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+    CURLOPT_CUSTOMREQUEST => 'GET',
+  ));
+
+  $result = curl_exec($curl);
+
+  curl_close($curl);
+
+  $decoded = json_decode($result, TRUE);
+  $result = $decoded['data'];
+  employees_batch_init($result);
+}
+
+/**
+ * Implements batch_init().
+ */
+function employees_batch_init($result)
+{
+  $batch = [
+    'title' => t('Importing Employees ...'),
+    'operations' => ['employees_batch_worker', [$result]],
+    'init_message' => t('Commencing'),
+    'progress_message' => t('Processed @current out of @total.'),
+    'error_message' => t('An error occurred during processing'),
+    'finished' => 'employees_batch_finished',
+    'file' => drupal_get_path('module', 'employees') . '/employees.install',
+  ];
+
+  // Al enviar el result con un foreach el proceso inicia pero da un error
+  // de contraint violation en tid, porque $new_employee llega vacío al batch
+  // worker.
+  // Y cuando se envia result y se realiza el foreach en el batch worker,
+  // hace el proceso de largo sin implementar ningun nodo.
+  // hacer validación si se esta recibiendo un array y si no esta vacio.
+  foreach ($result as $new_employee) {
+    // No combinar array() con [] e.g:
+    // array('employees_...', [$new_employee]);
+    // elegir entre uno u otro pero no ambos.
+    $batch['operations'][] = ['employees_batch_worker', [$new_employee]];
+  }
+  batch_set($batch);
+
+  // Necesario en cualquier batch que no sea enviado desde el Form API
+  // para setear una redirección al finalizar el proceso.
+  batch_process('<front>');
+}
+
+/**
+ * Implements batch_worker().
+ */
+function employees_batch_worker($new_employee, &$context)
+{
+  $employee = new stdClass();
+  $employee->type = 'employees';
+  $employee->language = LANGUAGE_NONE;
+  $employee->employee_id[LANGUAGE_NONE][0]['value'] = $new_employee['id'];
+  $employee->title = $new_employee['employee_name'];
+  $employee->employee_age[LANGUAGE_NONE][0]['value'] = $new_employee['employee_age'];
+
+  // Aquí no me asignaba los terminos débido a que la función taxonomy_get_tree
+  // me devolvia un array y luego el objeto, por eso no se podia acceder
+  // directamente al tid, con reset se soluciona esto para que quede como un
+  // objeto sin el array anterior.
+  $low = reset(taxonomy_get_term_by_name('Low salary'));
+  $medium = reset(taxonomy_get_term_by_name('Medium salary'));
+  $high = reset(taxonomy_get_term_by_name('High salary'));
+
+  if ($new_employee['employee_salary'] <= 20000) {
+    // En el caso de la taxonomia no es necesario recorrer el array porque
+    // drupal ya lo hace automagicamente.
+    $employee->employee_salary_type = $low->tid;
+  } elseif ($new_employee['employee_salary'] >= 20001 && $new_employee['employee_salary'] <= 50000) {
+    $employee->employee_salary_type = $medium->tid;
+  } else {
+    $employee->employee_salary_type = $high->tid;
+  }
+  $employee->status = 1;
+
+  node_object_prepare($employee);
+  node_save($employee);
+
+  $context['results']['processed']++;
+  $context['message'] = t('Processing employee "@title"', array('@title' => $employee->title));
+}
+
+/**
+ * Implements batch_finished().
+ */
+function employees_batch_finished($success, $results, $operations)
+{
+  if ($success) {
+    drupal_set_message(t('Batch completed successfully'));
+  } else {
+    // Reset funciona para hacer de nuevo la operación y poder obtener los datos necesarios.
+    $error_operation = reset($operations);
+    drupal_set_message(t(
+      'An error occurred while processing @operation with arguments : @args',
+      [
+        '@operation' => $error_operation[0],
+        '@args' => print_r($error_operation[0], TRUE),
+      ]
+    ));
+  }
 }
